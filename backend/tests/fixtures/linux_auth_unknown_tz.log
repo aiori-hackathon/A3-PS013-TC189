@@ -1,0 +1,2 @@
+Oct 31 10:05:00 web01 sshd[2403]: pam_unix(sshd:session): session opened for user alice by (uid=0)
+Oct 31 10:06:00 web01 sshd[2404]: Failed password for alice from 198.51.100.7 port 44321 ssh2

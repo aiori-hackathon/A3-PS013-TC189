@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="CyberTrace evidence quality, coverage and audit dashboard">
+  <title>Evidence Quality · CyberTrace</title>
+  <link rel="stylesheet" href="/static/styles.css">
+  <link rel="stylesheet" href="/static/quality.css">
+</head>
+<body>
+  <div class="shell">
+    <header class="topbar">
+      <div class="brand">
+        <div class="brand-mark" aria-hidden="true">
+          <span></span><span></span><span></span>
+        </div>
+        <div>
+          <h1>CYBERTRACE</h1>
+          <p>Evidence Quality</p>
+        </div>
+      </div>
+      <nav class="topnav" aria-label="Primary">
+        <a href="/dashboard">Dashboard</a>
+        <a href="/workspace">Workspace</a>
+        <a href="/agents">Agents</a>
+        <a href="/quality" class="active" aria-current="page">Quality</a>
+        <a href="/docs" target="_blank" rel="noopener">API docs</a>
+      </nav>
+      <div class="topbar-actions">
+        <span id="quality-pill" class="badge neutral">checking quality</span>
+      </div>
+    </header>
+
+    <aside class="sidebar" aria-label="Quality controls">
+      <div class="sidebar-heading">
+        <span>Scope</span>
+        <span id="quality-scope-count" class="count">0</span>
+      </div>
+      <form id="quality-filters" class="stack-form">
+        <label>
+          Investigation
+          <select id="investigation-select">
+            <option value="">Loading…</option>
+          </select>
+        </label>
+        <label>
+          Coverage window (hours)
+          <input id="window-hours" type="number" min="1" max="720" value="24">
+        </label>
+        <button id="refresh-button" class="secondary" type="button">Refresh quality</button>
+        <button id="reconcile-button" class="secondary" type="button">Reconcile duplicates</button>
+      </form>
+
+      <div class="sidebar-section">
+        <div class="sidebar-heading"><span>How to read this</span></div>
+        <p class="help">
+          Coverage describes what was collected, not what happened on the host.
+          Zero collected bytes does not prove zero activity. Timestamps shown as
+          uncertain are kept and never silently invented.
+        </p>
+      </div>
+
+      <footer class="sidebar-footer">
+        <span>Phase 3</span>
+        <span>Evidence-aware confidence</span>
+      </footer>
+    </aside>
+
+    <main class="workspace">
+      <section class="workspace-heading">
+        <div>
+          <p class="eyebrow">Investigative confidence</p>
+          <h2 id="quality-title">Evidence quality</h2>
+          <p class="muted" id="quality-description">
+            Collection coverage, parsing transparency, timestamp confidence, integrity and audit.
+          </p>
+        </div>
+        <div class="heading-meta">
+          <span id="quality-updated" class="muted small">Not loaded</span>
+        </div>
+      </section>
+
+      <div id="page-alert" class="alert" role="alert" hidden></div>
+
+      <section class="summary-grid quality-summary" aria-label="Quality summary">
+        <article class="metric">
+          <span class="metric-label">Coverage available</span>
+          <strong id="metric-coverage">—</strong>
+          <span id="metric-coverage-detail" class="metric-sub">no coverage loaded</span>
+        </article>
+        <article class="metric warning">
+          <span class="metric-label">Open gaps</span>
+          <strong id="metric-gaps">0</strong>
+          <span id="metric-gaps-detail" class="metric-sub">collection interruptions</span>
+        </article>
+        <article class="metric caution">
+          <span class="metric-label">Timestamp uncertainty</span>
+          <strong id="metric-uncertain">0</strong>
+          <span id="metric-uncertain-detail" class="metric-sub">events without confirmed UTC</span>
+        </article>
+        <article class="metric">
+          <span class="metric-label">Duplicate events</span>
+          <strong id="metric-duplicates">0</strong>
+          <span id="metric-duplicates-detail" class="metric-sub">linked, never deleted</span>
+        </article>
+        <article class="metric">
+          <span class="metric-label">Integrity mismatches</span>
+          <strong id="metric-mismatch">0</strong>
+          <span id="metric-mismatch-detail" class="metric-sub">stored bytes vs recorded hash</span>
+        </article>
+        <article class="metric">
+          <span class="metric-label">Audit events</span>
+          <strong id="metric-audit">0</strong>
+          <span class="metric-sub">preservation, access and verification</span>
+        </article>
+      </section>
+
+      <section class="panel">
+        <div class="panel-heading">
+          <div>
+            <p class="eyebrow">Coverage</p>
+            <h3>Sources and collection gaps</h3>
+          </div>
+          <div class="panel-note" id="coverage-window-note">Loaded per selected investigation.</div>
+        </div>
+        <div id="coverage-summary" class="quality-chip-row"></div>
+        <div class="table-wrap">
+          <table class="quality-table">
+            <thead>
+              <tr>
+                <th>Source</th>
+                <th>State</th>
+                <th>Expected / observed</th>
+                <th>Missing cycles</th>
+                <th>Bytes expected / received</th>
+                <th>Events</th>
+                <th>Clock offset</th>
+              </tr>
+            </thead>
+            <tbody id="coverage-body">
+              <tr><td colspan="7" class="muted">No sources loaded.</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div id="gap-list" class="quality-list"></div>
+        <p id="coverage-note" class="help"></p>
+      </section>
+
+      <section class="panel">
+        <div class="panel-heading">
+          <div>
+            <p class="eyebrow">Parsing transparency</p>
+            <h3>Parser outcomes by evidence</h3>
+          </div>
+          <div class="panel-note" id="parsing-note">What was accepted, rejected, skipped or approximated.</div>
+        </div>
+        <div id="parsing-totals" class="quality-chip-row"></div>
+        <div class="table-wrap">
+          <table class="quality-table quality-table-wide">
+            <thead>
+              <tr>
+                <th>Evidence</th>
+                <th>Parser</th>
+                <th>Status</th>
+                <th>Parsed / rejected</th>
+                <th>Missing required</th>
+                <th>Missing optional</th>
+                <th>Timestamp flags</th>
+                <th>Ties / unresolved</th>
+                <th>Duplicates</th>
+              </tr>
+            </thead>
+            <tbody id="parsing-body">
+              <tr><td colspan="9" class="muted">No evidence loaded.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <div class="quality-grid">
+        <section class="panel">
+          <div class="panel-heading">
+            <div>
+              <p class="eyebrow">Timestamp confidence</p>
+              <h3>UTC normalization</h3>
+            </div>
+          </div>
+          <div id="timestamp-summary" class="quality-chip-row"></div>
+          <p id="timestamp-rule" class="help"></p>
+          <p id="ordering-rule" class="help"></p>
+          <div id="timestamp-samples" class="quality-list"></div>
+        </section>
+
+        <section class="panel">
+          <div class="panel-heading">
+            <div>
+              <p class="eyebrow">Deduplication</p>
+              <h3>Linked duplicate groups</h3>
+            </div>
+          </div>
+          <div id="duplicate-summary" class="quality-chip-row"></div>
+          <div id="duplicate-list" class="quality-list"></div>
+          <p id="duplicate-note" class="help"></p>
+        </section>
+      </div>
+
+      <section class="panel">
+        <div class="panel-heading">
+          <div>
+            <p class="eyebrow">Integrity</p>
+            <h3>Preservation checks and manifests</h3>
+          </div>
+        </div>
+        <div id="integrity-summary" class="quality-chip-row"></div>
+        <div class="table-wrap">
+          <table class="quality-table">
+            <thead>
+              <tr>
+                <th>Evidence</th>
+                <th>Integrity</th>
+                <th>Checks</th>
+                <th>Last verified</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="integrity-body">
+              <tr><td colspan="5" class="muted">No evidence loaded.</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p id="integrity-note" class="help"></p>
+      </section>
+
+      <section class="panel">
+        <div class="panel-heading">
+          <div>
+            <p class="eyebrow">Audit trail</p>
+            <h3>Evidence lifecycle events</h3>
+          </div>
+        </div>
+        <div id="audit-list" class="quality-list">
+          <p class="muted">No audit events loaded.</p>
+        </div>
+      </section>
+    </main>
+  </div>
+  <script src="/static/quality.js" defer></script>
+</body>
+</html>

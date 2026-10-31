@@ -1,0 +1,5 @@
+203.0.113.77 - - [31/Oct/2026:09:55:05 +0530] "GET /index.html HTTP/1.1" 200 1043 "-" "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"
+203.0.113.77 - - [31/Oct/2026:09:55:12 +0530] "POST /login HTTP/1.1" 401 87 "https://example.test/login" "Mozilla/5.0"
+198.51.100.23 - - [31/Oct/2026:04:30:00 +0000] "GET /etc/passwd HTTP/1.1" 400 0 "-" "curl/8.5.0"
+203.0.113.88 - bob [31/Oct/2026:10:01:02 +0530] "GET /admin HTTP/1.1" 403 153 "-" "sqlmap/1.8"
+192.0.2.10 - - [31/Oct/2026:04:32:00 +0000] "GET /login HTTP/1.0" 200 512

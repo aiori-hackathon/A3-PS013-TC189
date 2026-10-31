@@ -1,0 +1,472 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="CyberTrace investigation dashboard and unified forensic timeline">
+  <title>Investigation Dashboard - CyberTrace</title>
+  <link rel="stylesheet" href="/static/dashboard.css">
+</head>
+<body>
+  <div class="app-shell">
+    <header class="topbar">
+      <a class="brand" href="/dashboard" aria-label="CyberTrace dashboard">
+        <span class="brand-mark" aria-hidden="true">CT</span>
+        <span class="brand-text">
+          <strong>CYBERTRACE</strong>
+          <small>Digital Forensics Timeline Analyzer</small>
+        </span>
+      </a>
+      <nav class="main-nav" aria-label="Primary">
+        <a href="/dashboard" class="active" aria-current="page">Dashboard</a>
+        <a href="/workspace">Evidence workspace</a>
+        <a href="/quality">Quality</a>
+        <a href="/agents">Agents</a>
+        <a href="/docs" target="_blank" rel="noopener">API docs</a>
+      </nav>
+      <div class="topbar-status">
+        <span id="global-health" class="status-pill neutral">Checking system</span>
+      </div>
+    </header>
+
+    <div class="layout">
+      <aside class="sidebar" aria-label="Investigations">
+        <div class="sidebar-heading">
+          <span>Investigations</span>
+          <span id="investigation-count" class="count">0</span>
+        </div>
+        <div id="investigation-list" class="investigation-list">
+          <p class="muted">Loading investigations...</p>
+        </div>
+        <details class="create-panel">
+          <summary>New investigation</summary>
+          <form id="create-investigation-form" class="stack-form">
+            <label>
+              Name
+              <input id="new-investigation-name" name="name" maxlength="200" required placeholder="e.g. SSH brute-force, 31 Oct">
+            </label>
+            <label>
+              Description <span class="optional">optional</span>
+              <textarea id="new-investigation-description" name="description" rows="2" maxlength="5000" placeholder="Scope and collection notes"></textarea>
+            </label>
+            <button type="submit" class="primary">Create investigation</button>
+          </form>
+        </details>
+        <div class="sidebar-note">
+          <strong>Evidence notes</strong>
+          <p>Coverage describes what was collected, not what happened on the host. Unresolved timestamps and collection gaps stay visible.</p>
+        </div>
+        <footer class="sidebar-footer">
+          <span>Phase 4.1</span>
+          <span>Investigation overview and unified timeline</span>
+        </footer>
+      </aside>
+
+      <main class="content">
+        <div id="global-alert" class="alert" role="alert" hidden></div>
+
+        <section class="panel overview-panel" aria-labelledby="overview-heading">
+          <div class="panel-heading overview-heading">
+            <div>
+              <p class="eyebrow" id="overview-heading">Incident overview</p>
+              <h1 id="investigation-title">No investigation selected</h1>
+              <p id="investigation-meta" class="muted">Create or select an investigation to begin.</p>
+            </div>
+            <div class="heading-actions">
+              <label class="window-control">
+                Coverage window
+                <select id="coverage-window">
+                  <option value="24">Last 24 hours</option>
+                  <option value="168">Last 7 days</option>
+                  <option value="720">Last 30 days</option>
+                  <option value="1">Last hour</option>
+                </select>
+              </label>
+              <button id="refresh-dashboard" type="button" class="secondary">Refresh</button>
+            </div>
+          </div>
+          <div class="overview-grid">
+            <div class="overview-item">
+              <span>Case created</span>
+              <strong id="overview-created">-</strong>
+            </div>
+            <div class="overview-item">
+              <span>Evidence collected</span>
+              <strong id="overview-collected-range">-</strong>
+            </div>
+            <div class="overview-item">
+              <span>Last successful collection</span>
+              <strong id="overview-last-success">-</strong>
+            </div>
+            <div class="overview-item">
+              <span>Coverage window</span>
+              <strong id="overview-window">-</strong>
+            </div>
+          </div>
+          <div id="incident-flags" class="flag-row" aria-label="Incident quality indicators">
+            <span class="muted">Quality indicators not loaded.</span>
+          </div>
+        </section>
+
+        <section class="metric-grid" aria-label="Investigation summary">
+          <article class="metric">
+            <span class="metric-label">Timeline events</span>
+            <strong id="metric-events">0</strong>
+            <span id="metric-events-sub" class="metric-sub">No events loaded</span>
+          </article>
+          <article class="metric">
+            <span class="metric-label">Evidence files</span>
+            <strong id="metric-evidence">0</strong>
+            <span id="metric-evidence-sub" class="metric-sub">0 sources</span>
+          </article>
+          <article class="metric">
+            <span class="metric-label">Sources reporting</span>
+            <strong id="metric-coverage">-</strong>
+            <span id="metric-coverage-sub" class="metric-sub">Coverage not loaded</span>
+          </article>
+          <article class="metric">
+            <span class="metric-label">Last successful collection</span>
+            <strong id="metric-last-success" class="metric-time">-</strong>
+            <span id="metric-last-success-sub" class="metric-sub">No successful agent cycle recorded</span>
+          </article>
+          <article class="metric warning">
+            <span class="metric-label">Open collection gaps</span>
+            <strong id="metric-gaps">0</strong>
+            <span id="metric-gaps-sub" class="metric-sub">No gaps loaded</span>
+          </article>
+          <article class="metric warning">
+            <span class="metric-label">Parsing failures</span>
+            <strong id="metric-parsing">0</strong>
+            <span id="metric-parsing-sub" class="metric-sub">No parser data loaded</span>
+          </article>
+          <article class="metric caution">
+            <span class="metric-label">Integrity attention</span>
+            <strong id="metric-integrity">0</strong>
+            <span id="metric-integrity-sub" class="metric-sub">No integrity data loaded</span>
+          </article>
+          <article class="metric caution">
+            <span class="metric-label">Timestamp uncertainty</span>
+            <strong id="metric-uncertain">0</strong>
+            <span id="metric-uncertain-sub" class="metric-sub">No timestamp data loaded</span>
+          </article>
+        </section>
+
+        <section class="panel" aria-labelledby="sources-heading">
+          <div class="panel-heading">
+            <div>
+              <p class="eyebrow">Collection confidence</p>
+              <h2 id="sources-heading">Registered sources and agent status</h2>
+            </div>
+            <div id="coverage-note" class="panel-note">Coverage not loaded.</div>
+          </div>
+          <div id="coverage-chips" class="chip-row">
+            <span class="muted">Loading coverage...</span>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Source</th>
+                  <th>Agent / origin</th>
+                  <th>Coverage</th>
+                  <th>Last successful collection</th>
+                  <th>Cycles expected / observed</th>
+                  <th>Bytes missing</th>
+                  <th>Events observed</th>
+                </tr>
+              </thead>
+              <tbody id="source-body">
+                <tr><td colspan="7" class="table-message">Loading sources...</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p class="help">Manual uploads remain unknown coverage. Zero bytes in a completed cycle does not prove zero host activity.</p>
+        </section>
+
+        <section class="panel" aria-labelledby="gaps-heading">
+          <div class="panel-heading">
+            <div>
+              <p class="eyebrow">Missing intervals</p>
+              <h2 id="gaps-heading">Collection gaps</h2>
+            </div>
+            <div class="panel-note">Observed, inferred and estimated boundaries are labelled explicitly.</div>
+          </div>
+          <div id="gap-chips" class="chip-row">
+            <span class="muted">Loading collection gaps...</span>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Status</th>
+                  <th>Scope / source</th>
+                  <th>Reason</th>
+                  <th>Basis</th>
+                  <th>Interval</th>
+                  <th>Duration</th>
+                  <th>Note</th>
+                </tr>
+              </thead>
+              <tbody id="gap-body">
+                <tr><td colspan="7" class="table-message">Loading collection gaps...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <div class="split-grid">
+          <section class="panel" aria-labelledby="parsing-heading">
+            <div class="panel-heading">
+              <div>
+                <p class="eyebrow">Parser outcomes</p>
+                <h2 id="parsing-heading">Parsing success and failure</h2>
+              </div>
+            </div>
+            <div id="parsing-chips" class="chip-row">
+              <span class="muted">Loading parser data...</span>
+            </div>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Evidence</th>
+                    <th>Parser</th>
+                    <th>Status</th>
+                    <th>Parsed / rejected</th>
+                    <th>Missing fields</th>
+                    <th>Timestamp flags</th>
+                    <th>Ordering</th>
+                  </tr>
+                </thead>
+                <tbody id="parsing-body">
+                  <tr><td colspan="7" class="table-message">Loading parsing outcomes...</td></tr>
+                </tbody>
+              </table>
+            </div>
+            <p class="help">A failed parser still preserves the original evidence. Open the evidence workspace for issue-level detail and reparse actions.</p>
+          </section>
+
+          <section class="panel" aria-labelledby="timestamps-heading">
+            <div class="panel-heading">
+              <div>
+                <p class="eyebrow">Timestamp confidence</p>
+                <h2 id="timestamps-heading">Uncertain timestamps</h2>
+              </div>
+            </div>
+            <div id="timestamp-chips" class="chip-row">
+              <span class="muted">Loading timestamp quality...</span>
+            </div>
+            <div id="timestamp-samples" class="sample-list">
+              <p class="muted small">Loading uncertain event samples...</p>
+            </div>
+            <details class="rules">
+              <summary>Normalization and ordering rules</summary>
+              <p id="timestamp-rule" class="help"></p>
+              <p id="ordering-rule" class="help"></p>
+            </details>
+          </section>
+        </div>
+
+        <section class="panel" aria-labelledby="integrity-heading">
+          <div class="panel-heading">
+            <div>
+              <p class="eyebrow">Evidence integrity</p>
+              <h2 id="integrity-heading">Preserved evidence and hash verification</h2>
+            </div>
+            <div class="panel-note">Verification checks stored bytes against the hash recorded at preservation.</div>
+          </div>
+          <div id="integrity-chips" class="chip-row">
+            <span class="muted">Loading integrity status...</span>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Evidence</th>
+                  <th>Integrity</th>
+                  <th>SHA-256</th>
+                  <th>Last verified</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody id="integrity-body">
+                <tr><td colspan="5" class="table-message">Loading integrity status...</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p class="help">A hash match proves the stored file is unchanged since preservation. It does not prove the evidence was authentic before collection.</p>
+        </section>
+
+        <section class="panel" aria-labelledby="correlations-heading">
+          <div class="panel-heading">
+            <div>
+              <p class="eyebrow">Cross-source analysis</p>
+              <h2 id="correlations-heading">Event correlations</h2>
+            </div>
+            <div class="heading-actions">
+              <button id="run-correlations" type="button" class="secondary">Run correlation</button>
+              <div id="correlation-count" class="panel-note">0 correlations</div>
+            </div>
+          </div>
+          <div id="correlation-chips" class="chip-row">
+            <span class="muted">Loading correlations...</span>
+          </div>
+          <div id="correlation-list" class="sample-list">
+            <p class="muted small">Loading correlations...</p>
+          </div>
+          <p class="help">Correlations are inferred from matching fields and time windows. They are not proof of an attack; dismiss any that are coincidental.</p>
+        </section>
+
+        <section class="panel" aria-labelledby="reports-heading">
+          <div class="panel-heading">
+            <div>
+              <p class="eyebrow">Reporting</p>
+              <h2 id="reports-heading">Investigation reports and exports</h2>
+            </div>
+            <div class="panel-note">Generated from stored investigation data.</div>
+          </div>
+          <div class="inline-actions">
+            <a id="download-pdf" class="secondary" href="#" target="_blank" rel="noopener">Download PDF report</a>
+            <a id="export-timeline-csv" class="secondary" href="#" target="_blank" rel="noopener">Export timeline CSV</a>
+            <a id="export-evidence-csv" class="secondary" href="#" target="_blank" rel="noopener">Export evidence CSV</a>
+            <a id="export-coverage-csv" class="secondary" href="#" target="_blank" rel="noopener">Export coverage CSV</a>
+            <a id="export-parsing-csv" class="secondary" href="#" target="_blank" rel="noopener">Export parsing CSV</a>
+            <a id="export-correlations-csv" class="secondary" href="#" target="_blank" rel="noopener">Export correlations CSV</a>
+          </div>
+          <p class="help">Reports include evidence hashes, collection gaps, parsing failures, timestamp uncertainty, and correlation explanations.</p>
+        </section>
+
+        <section class="panel timeline-panel" aria-labelledby="timeline-heading">
+          <div class="panel-heading">
+            <div>
+              <p class="eyebrow">Unified analysis</p>
+              <h2 id="timeline-heading">Incident timeline</h2>
+            </div>
+            <div id="timeline-count" class="panel-note">0 events</div>
+          </div>
+
+          <form id="timeline-filters" class="filter-grid">
+            <label class="wide">
+              Search
+              <input id="filter-q" placeholder="User, IP, host, path, message, raw text">
+            </label>
+            <label>
+              From (local)
+              <input id="filter-start" type="datetime-local">
+            </label>
+            <label>
+              To (local)
+              <input id="filter-end" type="datetime-local">
+            </label>
+            <label>
+              Source
+              <select id="filter-source-id">
+                <option value="">All sources</option>
+              </select>
+            </label>
+            <label>
+              Source type
+              <select id="filter-source-type">
+                <option value="">All types</option>
+                <option value="linux_auth">Linux authentication</option>
+                <option value="web_access">Web access</option>
+                <option value="unknown">Unknown</option>
+              </select>
+            </label>
+            <label>
+              Event type
+              <select id="filter-event-type">
+                <option value="">All events</option>
+              </select>
+            </label>
+            <label>
+              Hostname
+              <input id="filter-hostname" placeholder="web-01">
+            </label>
+            <label>
+              Timestamp status
+              <select id="filter-timestamp-status">
+                <option value="">All statuses</option>
+                <option value="normalized">Normalized</option>
+                <option value="missing_timezone">Missing timezone</option>
+                <option value="missing_year">Missing year</option>
+                <option value="missing_timestamp">Missing timestamp</option>
+                <option value="ambiguous">Ambiguous</option>
+                <option value="invalid">Invalid</option>
+              </select>
+            </label>
+            <label>
+              Sort
+              <select id="filter-sort">
+                <option value="asc">Oldest first</option>
+                <option value="desc">Newest first</option>
+              </select>
+            </label>
+            <label>
+              Page size
+              <select id="filter-limit">
+                <option value="25">25</option>
+                <option value="50" selected>50</option>
+                <option value="100">100</option>
+                <option value="200">200</option>
+              </select>
+            </label>
+            <label class="checkline">
+              <input id="filter-include-unknown" type="checkbox" checked>
+              Include unresolved timestamps
+            </label>
+            <label class="checkline">
+              <input id="filter-include-duplicates" type="checkbox" checked>
+              Include duplicate events
+            </label>
+            <div class="filter-actions">
+              <button type="submit" class="primary">Apply filters</button>
+              <button id="filter-reset" type="button" class="secondary">Reset</button>
+            </div>
+          </form>
+
+          <div class="table-wrap timeline-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Normalized time (UTC)</th>
+                  <th>Event</th>
+                  <th>Source</th>
+                  <th>Host / actor</th>
+                  <th>Evidence trace</th>
+                </tr>
+              </thead>
+              <tbody id="timeline-body">
+                <tr><td colspan="5" class="table-message">Select an investigation to load the timeline.</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="pager">
+            <button id="timeline-prev" type="button" class="secondary" disabled>Previous</button>
+            <span id="timeline-page-label" class="muted small">0 of 0 events</span>
+            <button id="timeline-next" type="button" class="secondary" disabled>Next</button>
+          </div>
+          <p class="help timeline-help">Timeline order uses normalized UTC time with deterministic tie-breakers. Ties and unresolved times are disclosed; they are not claims about real-world order.</p>
+        </section>
+      </main>
+    </div>
+  </div>
+
+  <dialog id="event-dialog" class="drawer" aria-labelledby="event-dialog-title">
+    <div class="drawer-head">
+      <div>
+        <p class="eyebrow">Event detail</p>
+        <h2 id="event-dialog-title">Event</h2>
+      </div>
+      <button type="button" class="icon-button" id="event-dialog-close" aria-label="Close event detail">Close</button>
+    </div>
+    <div id="event-dialog-body" class="drawer-body">
+      <p class="muted">Loading event detail...</p>
+    </div>
+  </dialog>
+
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+  <noscript>CyberTrace requires JavaScript for the investigation dashboard. Use the API documentation at /docs.</noscript>
+  <script src="/static/dashboard.js" defer></script>
+</body>
+</html>

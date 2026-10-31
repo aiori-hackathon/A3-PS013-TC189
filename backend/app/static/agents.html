@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="CyberTrace endpoint agent health and collection dashboard">
+  <title>Agents · CyberTrace</title>
+  <link rel="stylesheet" href="/static/styles.css">
+  <link rel="stylesheet" href="/static/agents.css">
+</head>
+<body>
+  <div class="shell">
+    <header class="topbar">
+      <div class="brand">
+        <div class="brand-mark" aria-hidden="true">
+          <span></span><span></span><span></span>
+        </div>
+        <div>
+          <h1>CYBERTRACE</h1>
+          <p>Endpoint Collection</p>
+        </div>
+      </div>
+      <nav class="topnav" aria-label="Primary">
+        <a href="/dashboard">Dashboard</a>
+        <a href="/workspace">Workspace</a>
+        <a href="/agents" class="active" aria-current="page">Agents</a>
+        <a href="/quality">Quality</a>
+        <a href="/docs" target="_blank" rel="noopener">API docs</a>
+      </nav>
+      <div class="topbar-actions">
+        <span id="fleet-pill" class="badge neutral">checking fleet</span>
+      </div>
+    </header>
+
+    <aside class="sidebar" aria-label="Agent filters and administration">
+      <div class="sidebar-heading">
+        <span>Fleet controls</span>
+        <span id="agent-count" class="count">0</span>
+      </div>
+
+      <form id="filters" class="stack-form">
+        <label>
+          Investigation
+          <select id="investigation-filter">
+            <option value="">All investigations</option>
+          </select>
+        </label>
+        <label>
+          Health
+          <select id="health-filter">
+            <option value="">All health states</option>
+            <option value="online">Online</option>
+            <option value="stale">Stale</option>
+            <option value="never_seen">Never seen</option>
+            <option value="disabled">Disabled</option>
+          </select>
+        </label>
+        <button id="refresh-button" class="secondary" type="button">Refresh fleet</button>
+      </form>
+
+      <div class="sidebar-section">
+        <div class="sidebar-heading"><span>Administration</span></div>
+        <label>
+          Enrollment token
+          <input id="admin-token" type="password" autocomplete="off"
+                 placeholder="Required to disable, enable or delete">
+        </label>
+        <p class="help">
+          Held in memory for this tab only. It is sent only with management
+          requests and is never stored by this page.
+        </p>
+      </div>
+
+      <footer class="sidebar-footer">
+        <span>Phase 2</span>
+        <span>Authenticated endpoint collection</span>
+      </footer>
+    </aside>
+
+    <main class="workspace">
+      <section class="workspace-heading">
+        <div>
+          <p class="eyebrow">Fleet status</p>
+          <h2>Endpoint agents</h2>
+          <p class="muted" id="fleet-description">
+            Health, collection inventory and delivery outcomes reported by registered agents.
+          </p>
+        </div>
+        <div class="heading-meta">
+          <span id="fleet-updated" class="muted small">Not loaded</span>
+        </div>
+      </section>
+
+      <div id="page-alert" class="alert" role="alert" hidden></div>
+
+      <section class="summary-grid agent-summary-grid" aria-label="Fleet summary">
+        <article class="metric">
+          <span class="metric-label">Registered agents</span>
+          <strong id="metric-total">0</strong>
+          <span id="metric-total-detail" class="metric-sub">No agents registered</span>
+        </article>
+        <article class="metric">
+          <span class="metric-label">Online</span>
+          <strong id="metric-online">0</strong>
+          <span class="metric-sub">Heartbeat within threshold</span>
+        </article>
+        <article class="metric warning">
+          <span class="metric-label">Stale agents</span>
+          <strong id="metric-attention">0</strong>
+          <span id="metric-attention-detail" class="metric-sub">Stale or reporting errors</span>
+        </article>
+        <article class="metric caution">
+          <span class="metric-label">Buffered queue</span>
+          <strong id="metric-queue">0</strong>
+          <span id="metric-queue-detail" class="metric-sub">0 B pending across agents</span>
+        </article>
+      </section>
+
+      <section class="panel" aria-labelledby="agent-list-heading">
+        <div class="panel-heading">
+          <div>
+            <h3 id="agent-list-heading">Agents</h3>
+            <p class="muted small" id="agent-list-note">Loading registered agents…</p>
+          </div>
+          <p class="panel-note">
+            Health is derived from the last authenticated contact. Queue values come
+            from the latest heartbeat.
+          </p>
+        </div>
+        <div class="table-wrap">
+          <table aria-describedby="agent-list-note">
+            <thead>
+              <tr>
+                <th scope="col">Agent</th>
+                <th scope="col">Health</th>
+                <th scope="col">Runtime</th>
+                <th scope="col">Last seen</th>
+                <th scope="col">Investigation</th>
+                <th scope="col">Sources</th>
+                <th scope="col">Queue</th>
+                <th scope="col">Batches</th>
+              </tr>
+            </thead>
+            <tbody id="agent-rows">
+              <tr><td class="empty-cell" colspan="8">Loading registered agents…</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section id="detail-panel" class="panel agent-detail-panel" aria-labelledby="detail-title" hidden>
+        <div class="detail-heading">
+          <div>
+            <p class="eyebrow">Agent detail</p>
+            <h3 id="detail-title">Agent</h3>
+            <p id="detail-subtitle" class="muted small"></p>
+            <div id="detail-badges" class="inline-chips"></div>
+          </div>
+          <div id="detail-actions" class="actions"></div>
+        </div>
+
+        <div id="detail-error" class="notice bad" hidden></div>
+
+        <div id="detail-meta" class="detail-grid agent-detail-grid"></div>
+
+        <h4 class="section-label">Collection sources</h4>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th scope="col">Source</th>
+                <th scope="col">Type</th>
+                <th scope="col">Status</th>
+                <th scope="col">Last collected</th>
+                <th scope="col">Cursor</th>
+                <th scope="col">Last error</th>
+              </tr>
+            </thead>
+            <tbody id="source-rows">
+              <tr><td class="empty-cell" colspan="6">No sources registered.</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h4 class="section-label">Recent batches</h4>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th scope="col">Batch</th>
+                <th scope="col">Status</th>
+                <th scope="col">Received</th>
+                <th scope="col">Files</th>
+                <th scope="col">Accepted</th>
+                <th scope="col">Duplicates</th>
+                <th scope="col">Failed</th>
+                <th scope="col">Errors</th>
+              </tr>
+            </thead>
+            <tbody id="batch-rows">
+              <tr><td class="empty-cell" colspan="8">No batches received.</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h4 class="section-label">Recent errors</h4>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th scope="col">Occurred</th>
+                <th scope="col">Code</th>
+                <th scope="col">Source</th>
+                <th scope="col">Message</th>
+                <th scope="col">Reported</th>
+              </tr>
+            </thead>
+            <tbody id="error-rows">
+              <tr><td class="empty-cell" colspan="5">No errors reported.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section id="detail-empty" class="panel detail-empty">
+        <p class="eyebrow">Agent detail</p>
+        <h3>Select an agent</h3>
+        <p class="muted small">
+          Choose a row above to inspect collection sources, buffered batches and
+          reported errors.
+        </p>
+      </section>
+    </main>
+  </div>
+
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+  <script src="/static/agents.js" defer></script>
+</body>
+</html>
