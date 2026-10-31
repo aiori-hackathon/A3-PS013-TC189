@@ -1,0 +1,9 @@
+# Normalize text files to LF in the repository.
+* text=auto
+
+# The endpoint agent targets Linux; always check it out with LF line endings.
+agent/** text eol=lf
+
+# Binary files must never be normalized.
+*.pdf binary
+*.png binary
