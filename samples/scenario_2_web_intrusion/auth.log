@@ -1,0 +1,4 @@
+2026-10-31T14:02:00+00:00 portal sshd[5301]: Failed password for bob from 198.51.100.77 port 44001 ssh2
+2026-10-31T14:02:07+00:00 portal sshd[5301]: Failed password for bob from 198.51.100.77 port 44002 ssh2
+2026-10-31T14:02:19+00:00 portal sshd[5301]: Accepted password for bob from 198.51.100.77 port 44003 ssh2
+2026-10-31T14:03:00+00:00 portal sudo: bob : TTY=pts/1 ; PWD=/home/bob ; USER=root ; COMMAND=/usr/bin/systemctl restart nginx

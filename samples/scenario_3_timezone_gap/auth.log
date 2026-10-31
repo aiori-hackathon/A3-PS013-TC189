@@ -1,0 +1,2 @@
+Oct 31 23:40:01 edge-01 sshd[9001]: Failed password for alice from 192.0.2.70 port 33001 ssh2
+Oct 31 23:41:10 edge-01 sshd[9001]: Accepted password for alice from 192.0.2.70 port 33002 ssh2

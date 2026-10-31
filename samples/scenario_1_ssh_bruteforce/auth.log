@@ -1,0 +1,7 @@
+2026-10-31T09:50:01+05:30 bastion sshd[4101]: Failed password for invalid user admin from 203.0.113.50 port 50101 ssh2
+2026-10-31T09:50:04+05:30 bastion sshd[4101]: Failed password for invalid user root from 203.0.113.50 port 50102 ssh2
+2026-10-31T09:50:09+05:30 bastion sshd[4101]: Failed password for alice from 203.0.113.50 port 50103 ssh2
+2026-10-31T09:50:13+05:30 bastion sshd[4101]: Failed password for alice from 203.0.113.50 port 50104 ssh2
+2026-10-31T09:50:19+05:30 bastion sshd[4101]: Accepted password for alice from 203.0.113.50 port 50105 ssh2
+2026-10-31T09:51:02+05:30 bastion sudo: alice : TTY=pts/0 ; PWD=/home/alice ; USER=root ; COMMAND=/usr/bin/cat /etc/shadow
+2026-10-31T09:51:05+05:30 bastion sshd[4102]: pam_unix(sshd:session): session opened for user alice by (uid=0)
