@@ -1,0 +1,38 @@
+{
+  "server_url": "https://cybertrace.example.internal:8443",
+  "api_prefix": "/api",
+  "enrollment_token_file": "/etc/cybertrace-agent/enrollment.token",
+  "state_dir": "/var/lib/cybertrace-agent",
+  "investigation_id": "00000000-0000-0000-0000-000000000000",
+  "display_name": "web-01",
+  "heartbeat_interval_seconds": 60,
+  "collection_interval_seconds": 30,
+  "flush_interval_seconds": 30,
+  "max_backoff_seconds": 300,
+  "http_timeout_seconds": 30,
+  "max_batch_bytes": 1048576,
+  "max_batch_files": 20,
+  "max_segment_bytes": 262144,
+  "max_buffer_bytes": 268435456,
+  "start_position": "beginning",
+  "allow_insecure_localhost": false,
+  "tls": {},
+  "sources": [
+    {
+      "key": "linux-auth",
+      "name": "Linux authentication log",
+      "source_type": "linux_auth",
+      "path": "/var/log/auth.log",
+      "expected_collection_interval_seconds": 30,
+      "enabled": true
+    },
+    {
+      "key": "nginx-access",
+      "name": "Nginx access log",
+      "source_type": "web_access",
+      "path": "/var/log/nginx/access.log",
+      "expected_collection_interval_seconds": 30,
+      "enabled": true
+    }
+  ]
+}

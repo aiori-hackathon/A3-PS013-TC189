@@ -1,0 +1,30 @@
+[Unit]
+Description=CyberTrace endpoint collection agent
+Documentation=file:/opt/cybertrace-agent/README.md
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=cybertrace
+Group=cybertrace
+ExecStart=/opt/cybertrace-agent/venv/bin/cybertrace-agent run --config /etc/cybertrace-agent/config.json
+Restart=on-failure
+RestartSec=10
+UMask=0077
+StateDirectory=cybertrace-agent
+ReadOnlyPaths=/var/log
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+LockPersonality=true
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+RestrictNamespaces=true
+SystemCallArchitectures=native
+
+[Install]
+WantedBy=multi-user.target
