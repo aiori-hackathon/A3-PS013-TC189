@@ -4,6 +4,9 @@
 # The endpoint agent targets Linux; always check it out with LF line endings.
 agent/** text eol=lf
 
+# Shell scripts must keep LF endings or Linux containers fail to boot.
+*.sh text eol=lf
+
 # Binary files must never be normalized.
 *.pdf binary
 *.png binary

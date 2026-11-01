@@ -1,0 +1,20 @@
+# Root build-context hygiene (the backend image builds from ./backend; this
+# file protects any root-context builds and keeps stale artifacts out).
+.git/
+.env
+.env.*
+!.env.example
+**/__pycache__/
+**/*.py[cod]
+**/.pytest_cache/
+**/.ruff_cache/
+**/.venv/
+**/venv/
+backend/storage/
+backend/tests/
+backend/pytest.ini
+agent/
+node_modules/
+*.log
+*.md
+!README.md

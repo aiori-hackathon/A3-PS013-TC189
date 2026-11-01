@@ -1,0 +1,77 @@
+name: cybertrace
+
+services:
+
+  # PostgreSQL: investigations, evidence metadata, agents, events, quality.
+  # The port is NOT published to the host; use
+  #   docker compose exec db psql -U "$POSTGRES_USER" -d "$POSTGRES_DB"
+  # or pg_dump inside the container for maintenance (see README).
+  db:
+    image: postgres:18.6-alpine
+    restart: unless-stopped
+    environment:
+      # Credentials come from .env (copy .env.example). Password must be
+      # URL-safe so the backend DATABASE_URL below can be assembled safely.
+      POSTGRES_USER: ${POSTGRES_USER:-cybertrace_app}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env (see .env.example)}
+      POSTGRES_DB: ${POSTGRES_DB:-cybertrace}
+      PGDATA: /var/lib/postgresql/data
+      PGTZ: UTC
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\""]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+
+  # Backend API + built-in dashboards (frontend is static files served by
+  # FastAPI itself, so there is no separate frontend service/container).
+  api:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    image: cybertrace-api:local
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      # DATABASE_URL is assembled here from the same credentials the db
+      # container was created with; the .env localhost URL is intentionally
+      # overridden inside Compose.
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-cybertrace_app}:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env (see .env.example)}@db:${POSTGRES_PORT:-5432}/${POSTGRES_DB:-cybertrace}
+      STORAGE_ROOT: /data/storage
+      ENVIRONMENT: ${ENVIRONMENT:-production}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      API_PREFIX: ${API_PREFIX:-/api}
+      CORS_ORIGINS: ${CORS_ORIGINS:-}
+      MAX_UPLOAD_SIZE_BYTES: ${MAX_UPLOAD_SIZE_BYTES:-52428800}
+      ALLOWED_EXTENSIONS: ${ALLOWED_EXTENSIONS:-.log,.txt,.auth,.access,.out,.audit}
+      AGENT_ENROLLMENT_TOKEN: ${AGENT_ENROLLMENT_TOKEN:-}
+      AGENT_STALE_AFTER_SECONDS: ${AGENT_STALE_AFTER_SECONDS:-300}
+      AGENT_BATCH_MAX_FILES: ${AGENT_BATCH_MAX_FILES:-50}
+      AGENT_BATCH_MAX_BYTES: ${AGENT_BATCH_MAX_BYTES:-52428800}
+      AGENT_MANIFEST_MAX_BYTES: ${AGENT_MANIFEST_MAX_BYTES:-524288}
+      QUALITY_DEFAULT_WINDOW_HOURS: ${QUALITY_DEFAULT_WINDOW_HOURS:-24}
+    volumes:
+      # Preserved evidence bytes live in this named volume, not in the image
+      # and not on a host bind mount (do not mount real evidence by default).
+      - evidence_data:/data/storage
+    ports:
+      # Only the API/dashboards are exposed. Change APP_PORT in .env if 8000
+      # is already in use (e.g. by a local non-Docker uvicorn instance).
+      - "${APP_PORT:-8000}:8000"
+    healthcheck:
+      # /api/health returns 200 only when database, schema, and storage are
+      # all OK, so this reflects actual application readiness.
+      test: ["CMD", "python", "-c", "import sys,urllib.request;r=urllib.request.urlopen('http://127.0.0.1:8000/api/health',timeout=4);sys.exit(0 if r.status==200 else 1)"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 30s
+
+volumes:
+  db_data:
+  evidence_data:
