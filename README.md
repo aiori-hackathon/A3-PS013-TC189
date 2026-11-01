@@ -203,7 +203,9 @@ original file; reparsing deletes and recreates derived parsing/event rows only.
 - Python 3.11+ (this implementation was verified with Python 3.13.15).
 - PostgreSQL 15+ (verified with PostgreSQL 18.6).
 - Windows PowerShell examples below; the same commands work with POSIX paths.
-- No Docker is required for the verified local setup.
+- No Docker is required for the verified local setup. A containerized
+  alternative is documented in "Running with Docker" below; its verification
+  status is described in `reports/DOCKER_SETUP_AND_VERIFICATION.md`.
 - For endpoint collection: Linux with Python 3.11+, read access to the selected
   logs, and HTTPS access to the server. See `agent/README.md`.
 
@@ -256,6 +258,145 @@ Bind to `127.0.0.1` by default. The investigator-facing API and dashboards have
 no login, authorization, or tenancy layer and must not be exposed to an
 untrusted network. Agent endpoints require a bearer token, but they still need
 TLS and a trusted reverse-proxy boundary before leaving localhost.
+
+## Running with Docker
+
+The containerized setup launches CyberTrace consistently on another computer
+with one command. Compose runs services:
+
+- `db` — PostgreSQL 18.6 (`postgres:18.6-alpine`) with a persistent named
+  volume `db_data`; the database port is **not** published to the host.
+- `api` — the backend image built from `backend/Dockerfile`
+  (`python:3.13.15-slim`), serving the API **and** the dashboards (the
+  frontend is dependency-free static HTML/JS under `backend/app/static/`
+  served by FastAPI itself, so there is no separate frontend container).
+
+### Requirements
+
+- Docker Desktop (Windows/macOS) or Docker Engine, with Compose v2
+  (`docker compose version` to check). WSL 2 backend on Windows.
+- Around 2 GiB free disk for images and data.
+
+### Setup and start
+
+```powershell
+git clone https://github.com/aiori-hackathon/A3-PS013-TC189.git
+cd A3-PS013-TC189
+Copy-Item .env.example .env
+```
+
+Edit `.env`: set `POSTGRES_PASSWORD` (required — Compose refuses to start
+without it). Use URL-safe characters only (letters, digits, `_`, `-`), because
+the backend `DATABASE_URL` is assembled from it inside Compose. Optionally set
+`APP_PORT` if 8000 is taken, and `AGENT_ENROLLMENT_TOKEN` to enable agent
+enrollment. The localhost `DATABASE_URL` from the same file is used only for
+non-Docker development; Compose overrides it in the container.
+
+Build and start (first start creates the database, runs the Alembic
+migrations automatically, then serves the API):
+
+```powershell
+docker compose up -d --build
+docker compose ps          # wait until both services show (healthy)
+docker compose logs -f api # watch migrations + startup
+```
+
+Access:
+
+| Surface | URL |
+| --- | --- |
+| Investigation dashboard / unified timeline | `http://localhost:8000/` |
+| Evidence workspace | `http://localhost:8000/workspace` |
+| Agent fleet dashboard | `http://localhost:8000/agents` |
+| Quality dashboard | `http://localhost:8000/quality` |
+| API documentation | `http://localhost:8000/docs` |
+| Health check | `http://localhost:8000/api/health` |
+
+Evidence uploaded through the dashboards is preserved inside the named
+`evidence_data` volume, not on a host bind mount and never inside the image,
+so real-case files are not copied into the deployment. The Postgres port stays
+internal; use `docker compose exec db psql -U "$POSTGRES_USER" -d
+"$POSTGRES_DB"` when needed.
+
+### Migrations
+
+The `api` entrypoint runs `alembic -c alembic.ini upgrade head` after the
+database is reachable and before uvicorn starts, so a fresh deployment builds
+the full schema (`9b97903dc807 → … → f42a00000001`). Later boots no-op.
+To check manually:
+
+```powershell
+docker compose exec api alembic -c alembic.ini current    # expect f42a00000001 (head)
+docker compose exec api alembic -c alembic.ini upgrade head
+```
+
+`alembic stamp` is never used for fresh deployments.
+
+### Stop, restart, logs
+
+```powershell
+docker compose stop        # stop containers, keep all data
+docker compose start       # resume
+docker compose restart api # restart one service
+docker compose logs -f     # follow all service logs
+docker compose down        # remove containers, KEEP volumes
+docker compose down -v     # remove containers AND erase database + evidence volumes (destructive)
+```
+
+### Backup and restore
+
+Data lives in two named volumes: `cybertrace_db_data` (database) and
+`cybertrace_evidence_data` (preserved evidence bytes). Back up both.
+
+```powershell
+# Database dump (SQL), from the project directory:
+docker compose exec db sh -lc 'pg_dump -U "$POSTGRES_USER" -d "$POSTGRES_DB"' > cybertrace_db_backup.sql
+
+# Restore into an empty database (fresh volume, db healthy):
+docker compose exec -T db sh -lc 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB"' < cybertrace_db_backup.sql
+
+# Evidence files archive (stop api first so nothing new lands mid-copy):
+docker compose stop api
+docker run --rm -v cybertrace_evidence_data:/data:ro -v "${PWD}:/backup" alpine sh -c "tar cf /backup/cybertrace_evidence_backup.tar -C /data/storage ."
+docker compose start api
+```
+
+### Rebuild and updates
+
+```powershell
+git pull                      # get newer code (and/or updated requirements.txt)
+docker compose up -d --build  # rebuild the api image and restart
+```
+
+Dependencies are installed from the pinned `backend/requirements.txt` inside
+the image; version bumps belong there, then rebuild.
+
+### Troubleshooting
+
+| Symptom | Fix |
+| --- | --- |
+| `docker compose up` fails with `Set POSTGRES_PASSWORD ...` | Copy `.env.example` to `.env` and set `POSTGRES_PASSWORD`. |
+| Address 8000 already in use (e.g. local uvicorn) | Set `APP_PORT=8080` in `.env`, run `docker compose up -d` again. |
+| Password rejected / URL confusion in logs | Use URL-safe characters (letters/digits/`-`/`_`); avoid `@`, `:`, `/`, `%`. |
+| `api` unhealthy or restarting | `docker compose logs api`; usually wrong password in `.env` or the db volume was reset. Remove containers only (`down`), not volumes, unless intentional. |
+| Data disappeared after `down -v` | Volumes were deleted intentionally by that command; restore from the dumps in the previous section. |
+| Tables missing / `schema_status: missing` on `/api/health` | Migrations did not run: `docker compose exec api alembic -c alembic.ini upgrade head`, then restart `api`. |
+| Image build fails on old Docker | Update Docker Desktop / Engine (Compose v2 required; compose project name needs Compose 2.20+). |
+| Slow first build on Windows | Docker Desktop WSL 2 backend + antivirus exclusions help; subsequent builds are cached. |
+
+### Endpoint agents in the containerized setup
+
+Agents are installed on Linux endpoints exactly as documented in
+`agent/README.md` (the agent must read that host's real log files, so it does
+not run inside this Compose stack). Point the agent at the api container's
+published host port (`APP_PORT`), e.g. `http://<docker-host>:8000/api`, and
+never expose an unauthenticated dashboard beyond a trusted network.
+
+See `reports/DOCKER_SETUP_AND_VERIFICATION.md` for the full verification
+record: what was executed (fresh-database migration, 31/31 synthetic E2E
+checks including PDF/CSV exports, restart persistence, 81 backend + 10 agent
+tests, lint) and which Docker-runtime checks remain for a machine with Docker
+installed.
 
 ## Configuration
 
@@ -578,8 +719,14 @@ backend/
   requirements-dev.txt
   pytest.ini
   pyproject.toml            ruff configuration
+  Dockerfile                backend container image (non-root, production start)
+  docker-entrypoint.sh      container entrypoint: wait for db, migrate, serve
+  .dockerignore             backend build-context filter
 samples/                    three synthetic incident scenarios
 docs/                       documentation set (installation, architecture, API, ...)
+reports/                    setup + verification records
+docker-compose.yml          db + api Compose stack (name: cybertrace)
+.dockerignore               repository-level build-context hygiene
 .env.example                placeholder configuration
 ```
 
@@ -706,6 +853,15 @@ workstation with PostgreSQL 18.6 and Python 3.13.15:
   `quality.js` pass `node --check`.
 - Alembic head: `f42a00000001` (applied and current on the development
   database).
+
+Docker deployment support was added after this state: the backend/app code is
+unchanged. Docker-related verification (fresh-database migration chain,
+31/31 synthetic end-to-end check against a newly migrated database with an
+isolated storage root, restart persistence, and the lint/test suites re-run on
+the final file state) is recorded in
+`reports/DOCKER_SETUP_AND_VERIFICATION.md`; the Docker engine was not
+available on the machine used for that report, so image build and container
+runtime checks there are explicitly listed as not executed.
 
 ## Team
 
